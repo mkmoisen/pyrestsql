@@ -1,0 +1,8 @@
+build/
+dist/
+.idea/
+pyrestsql.egg-info/
+sqlite_test.db
+tests/.coverage
+test/htmlcov/
+tests/__pycache__

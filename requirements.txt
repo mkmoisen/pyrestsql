@@ -1,0 +1,8 @@
+Flask
+Flask-Admin
+peewee
+psycopg2
+marshmallow
+apispec
+pytest
+pytest-cov
