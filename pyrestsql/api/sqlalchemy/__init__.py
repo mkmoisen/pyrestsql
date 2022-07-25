@@ -4,7 +4,7 @@ from flask import jsonify, request
 from pyrestsql.api import (BaseApi, PostgresqlIntegrityErrorHandler, MysqlIntegrityErrorHandler,
                               SqliteIntegrityErrorHandler, OracleIntegrityErrorHandler, NullIntegrityErrorHandler,
                               _FileApi, ApiMetaClass, IntegrityErrorManager, ErrorHandler, )
-from pyrestsql.exc import AuthorizationError
+from pyrestsql.exc import AuthorizationError, EntityNotFound
 from pyrestsql.api.sqlalchemy.filters import FilterSet
 from pyrestsql.api.sqlalchemy.pagination import Pagination
 from sqlalchemy import select, insert, update, delete, text, literal, bindparam, Column
@@ -23,14 +23,10 @@ except ImportError:
     cx_Oracle = None
 
 
-def check_cx_Oracle():
-    if not cx_Oracle:
-        raise ImportError("No module named 'cx_Oracle'")
-
-
 def _primary_key_field(model):
     if hasattr(model, '__table__'):
-        return model.__table__.primary_key.columns[0]
+        field = model.__table__.primary_key.columns[0]
+        return getattr(model, field.name)
 
     return model.primary_key.columns[0]
 
@@ -187,7 +183,7 @@ def _oralce_insert_plsql_block(session, query):
     You can however use an anonymous PLSQL block with bind variables.
     :return:
     """
-    check_cx_Oracle()
+    _check_cx_Oracle()
     conn = session.connection().connection
     cur = conn.cursor()
     sequence_value_or_rowcount = cur.var(cx_Oracle.NUMBER)
@@ -217,6 +213,12 @@ def _oralce_insert_plsql_block(session, query):
     session.execute(plsql, {'sequence_value_or_rowcount': sequence_value_or_rowcount})
 
     return sequence_value_or_rowcount.getvalue()
+
+
+def _check_cx_Oracle():
+    if not cx_Oracle:
+        raise ImportError("No module named 'cx_Oracle'")
+
 
 
 def execute_update(session, query):
@@ -448,7 +450,7 @@ class SqlAlchemyApi(BaseApi, metaclass=SqlAlchemyApiMetaClass):
 
         with self.Session(expire_on_commit=False) as session:
             if (obj := session.execute(query).scalars().one_or_none()) is None:
-                raise AuthorizationError()
+                raise EntityNotFound()
 
         return obj
 
@@ -593,11 +595,9 @@ class SqlAlchemyApi(BaseApi, metaclass=SqlAlchemyApiMetaClass):
             raise AuthorizationError()
 
     def delete_queryset(self, pk):
-        model = self.queryset().model
-
         primary_key_field = self._primary_key_field()
 
-        query = delete(model).where(
+        query = delete(self.model).where(
             primary_key_field == pk
         )
 

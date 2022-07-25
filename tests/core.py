@@ -62,6 +62,7 @@ class TestBase(unittest.TestCase):
         if expected_status_code != 200:
             return r.json['error']
 
+        assert 'items' in r.json, r.json
         return r.json['items']
 
     def post_user(self, email, expected_status_code=201):

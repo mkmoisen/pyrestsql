@@ -78,10 +78,9 @@ class SimpleApi:
 
     def get_response(self, obj, schema):
         if isinstance(obj, (Response, tuple)):
-            return obj, 200
-            # TODO should be able to return {"id": 1}, 200; also {"id": 1}, 200, {"X-Noob": "you"}
-            # If first param is a dct then we can jsonify if
-        return jsonify(schema.dump(obj)), 200
+            return self.default_response(obj, 200)
+
+        return jsonify(obj), 200
 
     def get_exception(self, ex):
         self.exception(ex)
@@ -109,13 +108,14 @@ class SimpleApi:
 
     def get_many_response(self, objs, schema, filterset_fields=None):
         if isinstance(objs, (Response, tuple)):
-            return objs, 200
-        if isinstance(objs, dict):
-            return objs
-        result = {
+            return self.default_response(objs, 200)
+
+        objs = {
+            # TODO inconsistent, schema.dump here but SimpleModelApi does it for GET/POST/PATCH
             'items': schema.dump(objs, many=True)
         }
-        return jsonify(result), 200
+
+        return jsonify(objs), 200
 
     def get_many_exception(self, ex):
         self.exception(ex)
@@ -149,7 +149,19 @@ class SimpleApi:
         return payload
 
     def post_response(self, obj, schema):
-        return jsonify(obj), 201
+        headers = self.post_response_headers(obj)
+
+        if isinstance(obj, (Response, tuple)):
+            return self.default_response(obj, 201, headers)
+
+        return jsonify(obj), 201, headers
+
+    def post_response_headers(self, obj):
+        headers = {}
+        if isinstance(obj, dict) and 'id' in obj:
+            headers['Location'] = f'{self.url_prefix}/{obj["id"]}'
+
+        return headers
 
     def post_exception(self, ex):
         self.exception(ex)
@@ -179,9 +191,15 @@ class SimpleApi:
         return schema.load(request.json, partial=True)
 
     def patch_response(self, obj, schema):
+        status_code = 200
+
+        if isinstance(obj, (Response, tuple)):
+            return self.default_response(obj, status_code)
+
         if not obj:
-            return jsonify({}), 200
-        return jsonify(obj), 200
+            return jsonify({}), status_code
+
+        return jsonify(obj), status_code
 
     def patch_exception(self, ex):
         self.exception(ex)
@@ -207,19 +225,61 @@ class SimpleApi:
 
     def delete_response(self, obj):
         status_code = 200
-        headers = {}
-        if not obj:
-            return jsonify({}), status_code, headers
-        if isinstance(obj, Response):
-            return obj, status_code
-        if isinstance(obj, tuple):
-            if obj[0] == Response:
-                return obj
-            if len(obj) > 1:
-                code = obj[1]
-            if len(obj) > 2:
-                headers = obj[2]
-        return jsonify(obj), status_code, headers
+
+        if isinstance(obj, (Response, tuple)):
+            return self.default_response(obj, status_code)
+
+        return jsonify({}), status_code
 
     def delete_exception(self, ex):
         self.exception(ex)
+
+    def default_response(self, obj, status_code, headers=None):
+        headers = headers or {}
+
+        if isinstance(obj, Response):
+            # assumes user has invoked `return jsonify(obj)`
+            return obj, status_code, headers
+
+        if isinstance(obj, tuple):
+            return _handle_response_tuple(obj, status_code, headers)
+
+        return obj, status_code, headers
+
+
+def _handle_response_tuple(obj, status_code, headers):
+    if _is_response_and_code_and_payment(obj):
+        return obj
+
+    if len(obj) == 2:
+        if _is_response_and_code(obj):
+            return _handle_response_and_code(obj, headers)
+        else:
+            return _handle_response_and_headers(obj, status_code)
+
+    return obj
+
+
+def _is_response_and_code_and_payment(obj):
+    # e.g. `return jsonify(obj), 2xx, {'X-foo': 'bar'}`
+    return len(obj) == 3
+
+
+def _is_response_and_code(obj):
+    # e.g. `return jsonify(obj), 2xx`
+    return isinstance(obj[1], int)
+
+
+def _handle_response_and_code(obj, headers):
+    # user has invoked `return jsonify(obj), 2xx`
+    status_code = obj[1]
+    return obj[0], status_code, headers
+
+
+def _is_response_and_headers(obj):
+    return
+
+
+def _handle_response_and_headers(obj, status_code):
+    headers = obj[1]
+    return obj[0], status_code, headers

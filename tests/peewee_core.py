@@ -1,10 +1,11 @@
 from tests.core import TestBase
 
-from peewee import Model, CharField, ForeignKeyField
+from peewee import Model, CharField, ForeignKeyField, DateTimeField
 from flask import Flask
 from pyrestsql.api.peewee import Api as PeeweeApi, insert_where as insert_where_peewee
 from pyrestsql.api.peewee.simple import SimpleModelApi as PeeweeSimpleModelApi
 import marshmallow
+from datetime import datetime
 
 
 def setup_peewee_database(db):
@@ -15,6 +16,7 @@ def setup_peewee_database(db):
 
     class User(BaseModel):
         email = CharField(max_length=30, null=False, unique=True)
+        creation_date = DateTimeField(default=datetime.now)
 
         class Meta:
             table_name = 'test_users'

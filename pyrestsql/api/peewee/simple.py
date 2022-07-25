@@ -84,6 +84,9 @@ class SimpleModelApi(SimpleApi):
             if not obj:
                 raise EntityNotFound()
 
+        if isinstance(obj, peewee.Model):
+            obj = schema.dump(obj)
+
         return super().get_response(obj, schema)
 
     def get_many_response(self, objs, schema, filterset_fields=None):
@@ -126,6 +129,7 @@ class SimpleModelApi(SimpleApi):
                 if not obj:
                     raise AuthorizationError()
 
+        if isinstance(obj, peewee.Model):
             obj = schema.dump(obj)
 
         return super().patch_response(obj, schema)

@@ -3,6 +3,7 @@ from pyrestsql.exc import EntityNotFound, AuthorizationError
 from pyrestsql.api.simple_api import SimpleApi
 from pyrestsql.api.sqlalchemy import execute_insert, execute_update, SqlAlchemyIntegrityErrorManager, FilterSet
 from sqlalchemy.exc import IntegrityError, NoResultFound
+from sqlalchemy.orm import DeclarativeMeta
 from sqlalchemy.sql import Select, Update, Delete, Insert
 
 
@@ -37,6 +38,9 @@ class SimpleModelApi(SimpleApi):
             if not obj:
                 raise EntityNotFound()
 
+        if self._is_sqlalchemy_model(obj):
+            obj = schema.dump(obj)
+
         return super().get_response(obj, schema)
 
     def get_many_response(self, objs, schema, filterset_fields=None):
@@ -52,7 +56,7 @@ class SimpleModelApi(SimpleApi):
             with self.Session(expire_on_commit=False) as session:
                 objs = session.execute(query).scalars().fetchall()
 
-        return super().get_response(objs, schema)
+        return super().get_many_response(objs, schema)
 
     def post_response(self, obj, schema):
         if isinstance(obj, Insert):
@@ -66,7 +70,8 @@ class SimpleModelApi(SimpleApi):
 
                 session.commit()
 
-        # TODO how to check if obj is a sqlalchemy model
+        if self._is_sqlalchemy_model(obj):
+            obj = schema.dump(obj)
 
         return super().post_response(obj, schema)
 
@@ -82,6 +87,7 @@ class SimpleModelApi(SimpleApi):
 
                 session.commit()
 
+        if self._is_sqlalchemy_model(obj):
             obj = schema.dump(obj)
 
         return super().patch_response(obj, schema)
@@ -101,3 +107,6 @@ class SimpleModelApi(SimpleApi):
             obj = {}
 
         return super().delete_response(obj)
+
+    def _is_sqlalchemy_model(self, obj):
+        return isinstance(obj.__class__, DeclarativeMeta)
