@@ -38,7 +38,7 @@ class Swagger:
         self.apis = []
 
     def get_swagger_ui(self):
-        return render_template('swaggerui.html')
+        return render_template('swagger/swaggerui.html')
 
     def get_swagger_json_spec(self):
         return jsonify(self.generate_openapi_spec()), 200
