@@ -23,7 +23,6 @@ class SimpleApi:
         self.patch_serializer_class = lambda: default_schema
         self.post_serializer_class = lambda: default_schema
 
-
     def register_app(self, app, error_handler=None, **kwargs):
         blueprint = Blueprint(self.url_prefix, __name__)
         self.blueprint = blueprint
@@ -31,6 +30,7 @@ class SimpleApi:
         for api, urls in self.apis.items():
             for url, func in urls.items():
                 if api in ('GET'):
+                    print(url)
                     blueprint.get(url)(func)
                 if api == 'GET_MANY':
                     blueprint.get(url)(func)

@@ -301,7 +301,7 @@ class ApiModelView(BaseModelView):
         try:
             self.on_model_delete(model)
 
-            _url_for = self.model.url_for('DELETE')
+            _url_for = self.model._url_for('DELETE')
             if _url_for is None:
                 raise Exception('DELETE api not supported for this model')
 

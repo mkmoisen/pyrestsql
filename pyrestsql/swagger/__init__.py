@@ -1,5 +1,11 @@
 from flask import Blueprint, render_template, jsonify
-import apispec
+from .swagger_model import SwaggerModel
+try:
+    import apispec
+    import apispec.ext.marshmallow
+    _is_apispec_installed = True
+except ImportError:
+    _is_apispec_installed = False
 
 
 class Swagger:
@@ -11,7 +17,10 @@ class Swagger:
     servers = None
     openapi_version = '3.0.3'
 
-    def __init__(self, app, base_api_class):
+    def __init__(self, app, base_api_class=None):
+        if not _is_apispec_installed:
+            raise ImportError('Must install apispec to use Swagger: pip install apispec')
+
         blueprint = Blueprint(
             'swagger', __name__, static_folder='static', template_folder='templates', url_prefix=self.url_prefix
         )
@@ -26,6 +35,7 @@ class Swagger:
         self.info = self.info or {'description': 'Swagger'}
         self.plugins = self.plugins or []
         self.servers = self.servers or []
+        self.apis = []
 
     def get_swagger_ui(self):
         return render_template('swaggerui.html')
@@ -33,7 +43,79 @@ class Swagger:
     def get_swagger_json_spec(self):
         return jsonify(self.generate_openapi_spec()), 200
 
+    def add_api(self, api: SwaggerModel):
+        self.apis.append(api)
+
+    def _generate_openapi_spec_simple(self):
+        if (marshmallow_plugin := apispec.ext.marshmallow.MarshmallowPlugin()) not in self.plugins:
+            self.plugins.append(marshmallow_plugin)
+
+        spec = apispec.APISpec(
+            title=self.title,
+            version=self.version,
+            openapi_version=self.openapi_version,
+            info=self.info,
+            plugins=self.plugins,
+            servers=self.servers,
+        )
+
+        self.add_security_scheme(spec)
+
+        self.add_no_content_schema(spec)
+
+        self.add_error_schema(spec)
+
+        for api in self.apis:
+            detail_operations = {}
+
+            if 'GET' in api.apis:
+                detail_operations['get'] = self.generate_get_spec(api, spec)
+
+            if 'PATCH' in api.apis:
+                detail_operations['patch'] = self.generate_patch_spec(api, spec)
+
+            if 'DELETE' in api.apis:
+                detail_operations['delete'] = self.generate_delete_spec(api, spec)
+
+            if detail_operations:
+                spec.path(
+                    path=api.url_prefix + '{pk}',
+                    operations=detail_operations,
+                    summary=api.name,
+                    description=api.__doc__,  # TODO for simpleapi how would this work
+                    parameters=[{
+                        'in': 'path',
+                        'name': 'pk',
+                        'schema': {
+                            'type': 'integer'
+                        },
+                        'required': True,
+                        'description': 'Primary key of the resource'
+                    }]
+                )
+
+            collection_operations = {}
+
+            if 'GET_MANY' in api.apis:
+                collection_operations['get'] = self.generate_get_many_spec(api, spec)
+
+            if 'POST' in api.apis:
+                collection_operations['post'] = self.generate_post_spec(api, spec)
+
+            if collection_operations:
+                spec.path(
+                    path=api.url_prefix,
+                    operations=collection_operations,
+                    summary=api.name,
+                    description=api.__doc__,
+                )
+
+        return spec.to_dict()
+
     def generate_openapi_spec(self):
+        if self.base_api_class is None:
+            return self._generate_openapi_spec_simple()
+
         if (marshmallow_plugin := apispec.ext.marshmallow.MarshmallowPlugin()) not in self.plugins:
             self.plugins.append(marshmallow_plugin)
 
@@ -73,21 +155,22 @@ class Swagger:
             if 'DELETE' in subclass.apis:
                 detail_operations['delete'] = self.generate_delete_spec(subclass, spec)
 
-            spec.path(
-                path=subclass.url_prefix + '{pk}',
-                operations=detail_operations,
-                summary=subclass.__name__,
-                description=subclass.__doc__,
-                parameters=[{
-                    'in': 'path',
-                    'name': 'pk',
-                    'schema': {
-                        'type': 'integer'
-                    },
-                    'required': True,
-                    'description': 'Primary key of the resource'
-                }]
-            )
+            if detail_operations:
+                spec.path(
+                    path=subclass.url_prefix + '{pk}',
+                    operations=detail_operations,
+                    summary=subclass.__name__,
+                    description=subclass.__doc__,
+                    parameters=[{
+                        'in': 'path',
+                        'name': 'pk',
+                        'schema': {
+                            'type': 'integer'
+                        },
+                        'required': True,
+                        'description': 'Primary key of the resource'
+                    }]
+                )
 
             collection_operations = {}
 
@@ -97,12 +180,13 @@ class Swagger:
             if 'POST' in subclass.apis:
                 collection_operations['post'] = self.generate_post_spec(subclass, spec)
 
-            spec.path(
-                path=subclass.url_prefix,
-                operations=collection_operations,
-                summary=subclass.__name__,
-                description=subclass.__doc__,
-            )
+            if collection_operations:
+                spec.path(
+                    path=subclass.url_prefix,
+                    operations=collection_operations,
+                    summary=subclass.__name__,
+                    description=subclass.__doc__,
+                )
 
         return spec.to_dict()
 
@@ -136,40 +220,44 @@ class Swagger:
         )
 
     def get_schema_name(self, api_class):
+        if isinstance(api_class, SwaggerModel):
+            return f'get_{api_class.name}'
         return f'get_{api_class.__name__}'
 
     def add_get_schema(self, api_class, spec):
         # TODO Not sure if this needs to be at the components level, since it will not be reused elsewhere
-        spec.components.schema(self.get_schema_name(api_class), schema=api_class().get_serializer_class())
+        spec.components.schema(self.get_schema_name(api_class), schema=api_class.get_serializer_class)
+
 
     def get_many_schema_name(self, api_class):
-        return f'get_many_{api_class.__name__}'
+        return f'get_many_{api_class.name}'
 
     def add_get_many_schema(self, api_class, spec):
-        spec.components.schema(self.get_many_schema_name(api_class), schema=api_class().get_many_serializer_class())
+        spec.components.schema(self.get_many_schema_name(api_class), schema=api_class.get_many_serializer_class)
 
     def patch_schema_name(self, api_class):
-        return f'patch_{api_class.__name__}'
+        return f'patch_{api_class.name}'
 
     def add_patch_schema(self, api_class, spec):
-        spec.components.schema(self.patch_schema_name(api_class), schema=api_class().patch_serializer_class())
+        spec.components.schema(self.patch_schema_name(api_class), schema=api_class.patch_serializer_class)
 
     def post_schema_name(self, api_class):
-        return f'post_{api_class.__name__}'
+        return f'post_{api_class.name}'
 
     def add_post_schema(self, api_class, spec):
-        spec.components.schema(self.post_schema_name(api_class), schema=api_class().post_serializer_class())
+        spec.components.schema(self.post_schema_name(api_class), schema=api_class.post_serializer_class)
 
     def generate_get_spec(self, api_class, spec):
         self.add_get_schema(api_class, spec)
 
-        description = api_class.get_documentation()
+        description = api_class.get_documentation
+        name = api_class.name
 
         return {
-            'summary': f'Gets one {api_class.__name__}',
+            'summary': f'Gets one {name}',
             'description': description,
             'tags': [
-                api_class.__name__
+                name,
             ],
             'responses': {
                 '200': {
@@ -185,16 +273,17 @@ class Swagger:
     def generate_patch_spec(self, api_class, spec):
         self.add_patch_schema(api_class, spec)
 
-        description = api_class.patch_documentation()
+        description = api_class.patch_documentation
+        name = api_class.name
 
         return {
-            'summary': f'Patch one {api_class.__name__}',
+            'summary': f'Patch one {name}',
             'description': description,
             'tags': [
-                api_class.__name__
+                name
             ],
             'requestBody': {
-                'description': api_class().patch_serializer_class().__doc__,
+                'description': api_class.patch_serializer_class.__doc__,
                 'required': True,
                 'content': {
                     'application/json': {
@@ -214,13 +303,14 @@ class Swagger:
         }
 
     def generate_delete_spec(self, api_class, spec):
-        description = api_class.delete_documenation()
+        description = api_class.delete_documenation
+        name = api_class.name
 
         return {
-            'summary': f'Delete one {api_class.__name__}',
+            'summary': f'Delete one {name}',
             'description': description,
             'tags': [
-                api_class.__name__
+                name
             ],
             'responses': {
                 '200': {
@@ -236,16 +326,17 @@ class Swagger:
     def generate_get_many_spec(self, api_class, spec):
         self.add_get_many_schema(api_class, spec)
 
-        description = api_class.get_many_documentation()
+        name = api_class.name
+        description = api_class.get_many_documentation
 
         # TODO queryparameters from filters
 
         return {
-            'summary': f'Get many {api_class.__name__}',
+            'summary': f'Get many {name}',
             'security': [{'token': []}],
             'description': description,
             'tags': [
-                api_class.__name__
+                name
             ],
             'responses': {
                 '200': {
@@ -262,16 +353,17 @@ class Swagger:
     def generate_post_spec(self, api_class, spec):
         self.add_post_schema(api_class, spec)
 
-        description = api_class.post_documentation()
+        name = api_class.name
+        description = api_class.post_documentation
 
         return {
-            'summary': f'Post one {api_class.__name__}',
+            'summary': f'Post one name',
             'description': description,
             'tags': [
-                api_class.__name__
+                name
             ],
             'requestBody': {
-                'description': api_class().post_serializer_class().__doc__,
+                'description': api_class.post_serializer_class.__doc__,
                 'required': True,
                 'content': {
                     'application/json': {

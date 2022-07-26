@@ -5,6 +5,7 @@ from pyrestsql.api.peewee import execute_insert, execute_update, PeeweeIntegrity
 from pyrestsql.exc import EntityNotFound, AuthorizationError
 from pyrestsql.api.simple_api import SimpleApi
 from peewee import ModelSelect, ModelUpdate, ModelDelete, ModelInsert
+from pyrestsql.swagger.swagger_model import SwaggerSimpleConverter
 
 
 class AdminConverter:
@@ -23,23 +24,23 @@ class AdminConverter:
             get_serializer_class=self.simple_api.get_serializer_class,
             post_serializer_class=self.simple_api.post_serializer_class,
             patch_serializer_class=self.simple_api.patch_serializer_class,
-            get_many_url_for=self.url_for('GET_MANY'),
-            get_url_for=self.url_for('GET'),
-            post_url_for=self.url_for('POST'),
-            patch_url_for=self.url_for('PATCH'),
-            delete_url_for=self.url_for('DELETE'),
+            get_many_url_for=self._url_for('GET_MANY'),
+            get_url_for=self._url_for('GET'),
+            post_url_for=self._url_for('POST'),
+            patch_url_for=self._url_for('PATCH'),
+            delete_url_for=self._url_for('DELETE'),
             db=self.simple_api.db,
         )
 
-    def function_name(self, api):
+    def _function_name(self, api):
         functions = list(self.simple_api.apis[api].values())
         if not functions:
             return None
 
         return functions[0].__name__
 
-    def url_for(self, api):
-        function_name = self.function_name(api)
+    def _url_for(self, api):
+        function_name = self._function_name(api)
         if not function_name:
             return None
 
@@ -50,16 +51,21 @@ class AdminConverter:
 
 class SimpleModelApi(SimpleApi):
     integrity_error_manager_class = PeeweeIntegrityErrorManager
-    admin_converter = AdminConverter
+    admin_converter_class = AdminConverter
+    swagger_converter_class = SwaggerSimpleConverter
 
     def __init__(self, url_prefix, default_schema=None):
         super().__init__(url_prefix, default_schema)
         self.db = None
         self.integrity_error_manager = None
 
-    def admin(self, model, name=None, admin_converter=None, **kwargs):
-        admin_converter = admin_converter or self.admin_converter
-        return admin_converter(self).admin(model, name, **kwargs)
+    def admin(self, model, name=None, admin_converter_class=None, **kwargs):
+        admin_converter_class = admin_converter_class or self.admin_converter_class
+        return admin_converter_class(self).admin(model, name, **kwargs)
+
+    def swagger(self, name, swagger_converter_class=None, **kwargs):
+        swagger_converter_class = swagger_converter_class or self.swagger_converter_class
+        return swagger_converter_class(self).swagger(name, **kwargs)
 
     def register_app(self, app, db=None, integrity_error_manager=None, **kwargs):
         super().register_app(app, **kwargs)
