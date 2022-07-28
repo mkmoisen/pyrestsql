@@ -469,7 +469,7 @@ class SqlAlchemyApi(BaseApi, metaclass=SqlAlchemyApiMetaClass):
     def get_many_objects(self):
         query = self.get_many_permissions(self.get_many_queryset())
 
-        query = self.filterset.apply_filters(query, request.args)
+        query = self.filterset.apply_filters(request.args, query)
 
         query, meta = self.pagination.paginate(query)
 

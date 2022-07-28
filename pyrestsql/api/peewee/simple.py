@@ -53,6 +53,7 @@ class SimpleModelApi(SimpleApi):
     integrity_error_manager_class = PeeweeIntegrityErrorManager
     admin_converter_class = AdminConverter
     swagger_converter_class = SwaggerSimpleConverter
+    filterset_class = FilterSet
 
     def __init__(self, url_prefix, default_schema=None):
         super().__init__(url_prefix, default_schema)
@@ -100,10 +101,7 @@ class SimpleModelApi(SimpleApi):
             query = objs
 
             if filterset_fields:
-                query = FilterSet(
-                    filterset_fields,
-                    query
-                ).apply_filters(query, request.args)
+                query = self.filterset_class(filterset_fields, query)(request.args)
 
             with self.db:
                 objs = list(query)

@@ -10,6 +10,8 @@ from sqlalchemy.sql import Select, Update, Delete, Insert
 class SimpleModelApi(SimpleApi):
     integrity_error_manager_class = SqlAlchemyIntegrityErrorManager
 
+    filterset_class = FilterSet
+
     def __init__(self, url_prefix):
         super().__init__(url_prefix)
         self.Session = None
@@ -48,10 +50,7 @@ class SimpleModelApi(SimpleApi):
             query = objs
 
             if filterset_fields:
-                query = FilterSet(
-                    filterset_fields,
-                    query
-                ).apply_filters(query, request.args)
+                query = self.filterset_class(filterset_fields, query)(request.args)
 
             with self.Session(expire_on_commit=False) as session:
                 objs = session.execute(query).scalars().fetchall()

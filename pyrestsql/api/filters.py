@@ -20,6 +20,9 @@ class _FilterSet:
 
         self.filterset_schema = self.make_serializer_class()
 
+    def __call__(self, query_params, query=None):
+        return self.apply_filters(query_params, query)
+
     def ensure_fields(self, filterset_fields) -> dict:
         new_fields = {}
 
@@ -97,17 +100,21 @@ class _FilterSet:
     def parse_query_params(self, query_params=None):
         return self.filterset_schema().load(query_params)
 
-    def apply_filters(self, query, query_params=None):
+    def apply_filters(self, query_params=None, query=None):
+        if query is None:
+            query = self.query
+        #query = query or self.query
+
         if not self.filterset_fields:
             return query
 
         query_params = self.parse_query_params(query_params)
 
-        query = self._apply_filters(query, query_params)
+        query = self._apply_filters(query_params, query)
 
         return query
 
-    def _apply_filters(self, query, query_params):
+    def _apply_filters(self, query_params, query):
         for key, value in query_params.items():
             filter = self.filterset_fields[key]
             query = query.where(
