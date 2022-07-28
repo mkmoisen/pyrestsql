@@ -31,12 +31,15 @@ def _primary_key_field(model):
     return model.primary_key.columns[0]
 
 
-def insert_where(model, where=None, **kwargs):
+def insert_where(model, from_=None, where=None, **kwargs):
     kwargs = _sqlalchemy_insert_values_workaround(model, **kwargs)
 
-    sel = select(
-        *[bindparam(key, value) for key, value in kwargs.items()]
-    )
+    if from_ is None:
+        sel = select(
+            *[bindparam(key, value) for key, value in kwargs.items()]
+        )
+    else:
+        sel = select(*kwargs.values())
 
     if where:
         sel = sel.where(where)

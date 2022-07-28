@@ -29,8 +29,7 @@ class SimpleApi:
 
         for api, urls in self.apis.items():
             for url, func in urls.items():
-                if api in ('GET'):
-                    print(url)
+                if api == 'GET':
                     blueprint.get(url)(func)
                 if api == 'GET_MANY':
                     blueprint.get(url)(func)

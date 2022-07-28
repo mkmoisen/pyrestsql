@@ -17,13 +17,18 @@ def _primary_key_field(model):
     return model._meta.primary_key
 
 
-def insert_where(model, where=None, **kwargs):
+def insert_where(model, from_=None, where=None, **kwargs):
     kwargs = _populate_insert_defaults(model, kwargs)
 
     fields, values = zip(*kwargs.items())
 
+    if from_ is None:
+        select = Select(columns=values)
+    else:
+        select = from_.select(*values)
+
     ins = model.insert_from(
-        Select(columns=values).where(
+        select.where(
             where
         ),
         fields
