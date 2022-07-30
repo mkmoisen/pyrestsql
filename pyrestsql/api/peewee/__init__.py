@@ -25,12 +25,13 @@ def insert_where(model, from_=None, where=None, **kwargs):
     if from_ is None:
         select = Select(columns=values)
     else:
-        select = from_.select(*values)
+        select = from_.select(*values).from_(from_)
+
+    if where:
+        select = select.where(where)
 
     ins = model.insert_from(
-        select.where(
-            where
-        ),
+        select,
         fields
     )
 
