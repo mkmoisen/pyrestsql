@@ -68,6 +68,9 @@ class Swagger:
         for api in self.apis:
             detail_operations = {}
 
+            if api.default_schema:
+                self.add_default_schema(api, spec)
+
             if 'GET' in api.apis:
                 detail_operations['get'] = self.generate_get_spec(api, spec)
 
@@ -219,33 +222,91 @@ class Swagger:
             }
         )
 
+    def default_schema_name(self, api_class):
+
+        return api_class.name
+
+    def add_default_schema(self, api_class, spec):
+        from apispec.ext.marshmallow.common import make_schema_key
+
+        spec.components.schema(self.default_schema_name(api_class), schema=api_class.default_schema)
+
+    def _uses_default_schema(self, api_class, serializer_class):
+        return serializer_class is api_class.default_schema
+
     def get_schema_name(self, api_class):
-        if isinstance(api_class, SwaggerModel):
-            return f'get_{api_class.name}'
+        if self._uses_default_schema(api_class, api_class.get_serializer_class):
+            return self.default_schema_name(api_class)
+
         return f'get_{api_class.__name__}'
 
     def add_get_schema(self, api_class, spec):
-        # TODO Not sure if this needs to be at the components level, since it will not be reused elsewhere
+        if self._uses_default_schema(api_class, api_class.get_serializer_class):
+            return
+
         spec.components.schema(self.get_schema_name(api_class), schema=api_class.get_serializer_class)
 
-
     def get_many_schema_name(self, api_class):
+        if self._uses_default_schema(api_class, api_class.get_many_serializer_class):
+            return self.default_schema_name(api_class)
+
         return f'get_many_{api_class.name}'
 
     def add_get_many_schema(self, api_class, spec):
+        if self._uses_default_schema(api_class, api_class.get_many_serializer_class):
+            return
+
         spec.components.schema(self.get_many_schema_name(api_class), schema=api_class.get_many_serializer_class)
 
     def patch_schema_name(self, api_class):
+        if self._uses_default_schema(api_class, api_class.patch_serializer_class):
+            return self.default_schema_name(api_class)
+
         return f'patch_{api_class.name}'
 
     def add_patch_schema(self, api_class, spec):
+        if self._uses_default_schema(api_class, api_class.patch_serializer_class):
+            return
+
         spec.components.schema(self.patch_schema_name(api_class), schema=api_class.patch_serializer_class)
 
+    def patch_output_schema_name(self, api_class):
+        if self._uses_default_schema(api_class, api_class.patch_output_serializer_class):
+            return self.default_schema_name(api_class)
+
+        return f'patch_output_{api_class.name}'
+
+    def add_patch_output_schema(self, api_class, spec):
+        if self._uses_default_schema(api_class, api_class.patch_output_serializer_class):
+            return
+
+        spec.components.schema(self.patch_output_schema_name(api_class), schema=api_class.patch_output_serializer_class)
+
     def post_schema_name(self, api_class):
+        if self._uses_default_schema(api_class, api_class.post_serializer_class):
+            return self.default_schema_name(api_class)
+
         return f'post_{api_class.name}'
 
     def add_post_schema(self, api_class, spec):
+        from apispec.ext.marshmallow.common import make_schema_key
+
+        if self._uses_default_schema(api_class, api_class.post_serializer_class):
+            return
+
         spec.components.schema(self.post_schema_name(api_class), schema=api_class.post_serializer_class)
+
+    def post_output_schema_name(self, api_class):
+        if self._uses_default_schema(api_class, api_class.post_output_serializer_class):
+            return self.default_schema_name(api_class)
+
+        return f'post_output_{api_class.name}'
+
+    def add_post_output_schema(self, api_class, spec):
+        if self._uses_default_schema(api_class, api_class.post_output_serializer_class):
+            return
+
+        spec.components.schema(self.post_output_schema_name(api_class), schema=api_class.post_output_serializer_class)
 
     def generate_get_spec(self, api_class, spec):
         self.add_get_schema(api_class, spec)
@@ -303,7 +364,7 @@ class Swagger:
         }
 
     def generate_delete_spec(self, api_class, spec):
-        description = api_class.delete_documenation
+        description = api_class.delete_documentation
         name = api_class.name
 
         return {
@@ -329,8 +390,6 @@ class Swagger:
         name = api_class.name
         description = api_class.get_many_documentation
 
-        # TODO queryparameters from filters
-
         return {
             'summary': f'Get many {name}',
             'security': [{'token': []}],
@@ -338,6 +397,13 @@ class Swagger:
             'tags': [
                 name
             ],
+            # TODO bug, won't work with Filter() class,
+            # TODO unsure how to handle simple schema, could force user to add the Model in the constructor.
+            'parameters': [{
+                'in': 'query',
+                'name': field,
+                'required': False,
+            } for field in api_class.filterset_fields],
             'responses': {
                 '200': {
                     'content': {
@@ -352,6 +418,7 @@ class Swagger:
 
     def generate_post_spec(self, api_class, spec):
         self.add_post_schema(api_class, spec)
+        self.add_post_output_schema(api_class, spec)
 
         name = api_class.name
         description = api_class.post_documentation
@@ -375,12 +442,7 @@ class Swagger:
                 '201': {
                     'content': {
                         'application/json': {
-                            'type': 'object',
-                            'properties': {
-                                'id': {
-                                    'type': 'int',
-                                }
-                            }
+                            'schema': self.post_output_schema_name(api_class)
                         }
                     }
                 }

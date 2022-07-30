@@ -317,7 +317,7 @@ class BaseApi(metaclass=ApiMetaClass):
             self.post_permissions,
         )
 
-    def patch_documenation(self):
+    def patch_documentation(self):
         return _documentation(
             self.patch,
             self.perform_update,
@@ -325,7 +325,7 @@ class BaseApi(metaclass=ApiMetaClass):
             self.patch_permissions,
         )
 
-    def delete_documenation(self):
+    def delete_documentation(self):
         return _documentation(
             self.delete,
             self.perform_delete,

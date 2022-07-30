@@ -21,7 +21,10 @@ class SimpleApi:
         self.get_serializer_class = lambda: default_schema
         self.get_many_serializer_class = lambda: default_schema
         self.patch_serializer_class = lambda: default_schema
+        self.patch_output_serializer_class = lambda: default_schema
         self.post_serializer_class = lambda: default_schema
+        self.post_output_serializer_class = lambda: default_schema
+        self.filterset_fields = []
 
     def register_app(self, app, error_handler=None, **kwargs):
         blueprint = Blueprint(self.url_prefix, __name__)
@@ -84,12 +87,16 @@ class SimpleApi:
     def get_exception(self, ex):
         self.exception(ex)
 
-    def get_many(self, schema=None, url=None, filterset_fields=None):
+    def get_many(self, schema=None, url=None, filterset_fields=None, apply_filterset_fields=True):
         schema = schema or self.default_schema
         url = url or self.url_prefix
-        filterset_fields = filterset_fields or []
+        self.filterset_fields = filterset_fields or []
         schema = self.ensure_schema(schema)
         self.get_many_serializer_class = lambda: schema
+
+        filterset_fields = self.filterset_fields
+        if not apply_filterset_fields:
+            filterset_fields = []
 
         def _get_many(func):
             @functools.wraps(func)
@@ -126,6 +133,7 @@ class SimpleApi:
         schema = self.ensure_schema(schema)
         output_schema = self.ensure_schema(output_schema)
         self.post_serializer_class = lambda: schema
+        self.post_output_serializer_class = lambda: output_schema
 
         def _post(func):
             @functools.wraps(func)
@@ -165,11 +173,14 @@ class SimpleApi:
     def post_exception(self, ex):
         self.exception(ex)
 
-    def patch(self, schema=None, url=None):
+    def patch(self, schema=None, output_schema=None, url=None):
         schema = schema or self.default_schema
+        output_schema = output_schema or schema
         url = url or f'{self.url_prefix}/<int:pk>'
         schema = self.ensure_schema(schema)
+        output_schema = self.ensure_schema(output_schema)
         self.patch_serializer_class = lambda: schema
+        self.patch_output_serializer_class = lambda: output_schema
 
         def _patch(func):
             @functools.wraps(func)
@@ -177,7 +188,7 @@ class SimpleApi:
                 try:
                     payload = self.patch_payload(schema)
                     result = func(*args, payload=payload, **kwargs)
-                    return self.patch_response(result, schema)
+                    return self.patch_response(result, output_schema)
                 except Exception as ex:
                     self.patch_exception(ex)
 
