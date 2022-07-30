@@ -52,8 +52,8 @@ def patch(test_client, url, headers=None, expected_status_code=200, **json):
 class RestTokenTester:
     def __init__(self, test_client, url_prefix):
         self.test_client = test_client
-        if url_prefix[-1] == '/':
-            url_prefix = url_prefix[:-1]
+        if url_prefix[-1] != '/':
+            url_prefix = url_prefix + '/'
         self.url_prefix = url_prefix
 
     def _make_authorization_headers(self, token):
@@ -65,7 +65,7 @@ class RestTokenTester:
 
     def get(self, token, pk, expected_status_code=200):
         headers = self._make_authorization_headers(token)
-        return get(self.test_client, f'{self.url_prefix}/{pk}/', headers, expected_status_code)
+        return get(self.test_client, f'{self.url_prefix}{pk}/', headers, expected_status_code)
 
     def get_many(self, token, expected_status_code=200, **query_params):
         headers = self._make_authorization_headers(token)
@@ -77,8 +77,8 @@ class RestTokenTester:
 
     def patch(self, token, pk, expected_status_code=200, **json):
         headers = self._make_authorization_headers(token)
-        return patch(self.test_client, f'{self.url_prefix}/{pk}/', headers, expected_status_code, **json)
+        return patch(self.test_client, f'{self.url_prefix}{pk}/', headers, expected_status_code, **json)
 
     def delete(self, token, pk, expected_status_code=200):
         headers = self._make_authorization_headers(token)
-        return delete(self.test_client, f'{self.url_prefix}/{pk}/', headers, expected_status_code)
+        return delete(self.test_client, f'{self.url_prefix}{pk}/', headers, expected_status_code)

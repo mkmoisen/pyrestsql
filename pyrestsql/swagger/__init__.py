@@ -357,7 +357,7 @@ class Swagger:
         description = api_class.post_documentation
 
         return {
-            'summary': f'Post one name',
+            'summary': f'Post one {name}',
             'description': description,
             'tags': [
                 name
