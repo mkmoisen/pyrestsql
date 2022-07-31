@@ -69,6 +69,17 @@ class SimpleModelApi(SimpleApi):
 
                 session.commit()
 
+        if isinstance(obj, Select):
+            query = obj
+
+            with self.Session(expire_on_commit=False) as session:
+                obj = session.execute(query).scalars().one_or_none()
+
+                if not obj:
+                    raise AuthorizationError()
+
+                session.commit()
+
         if self._is_sqlalchemy_model(obj):
             obj = schema.dump(obj)
 

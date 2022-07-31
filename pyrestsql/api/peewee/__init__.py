@@ -22,10 +22,12 @@ def insert_where(model, from_=None, where=None, **kwargs):
 
     fields, values = zip(*kwargs.items())
 
-    if from_ is None:
-        select = Select(columns=values)
-    else:
+    if isinstance(from_, peewee.Select):
+        select = Select((from_,), columns=values)
+    elif isinstance(from_, peewee.CTE):
         select = from_.select(*values).from_(from_)
+    else:
+        select = Select(columns=values)
 
     if where:
         select = select.where(where)

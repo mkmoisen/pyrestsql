@@ -118,6 +118,15 @@ class SimpleModelApi(SimpleApi):
             if not obj:
                 raise AuthorizationError()
 
+        elif isinstance(obj, ModelSelect):
+            query = obj
+
+            with self.db:
+                obj = query.get_or_none()
+
+            if not obj:
+                raise AuthorizationError()
+
         if isinstance(obj, peewee.Model):
             obj = schema.dump(obj)
 
